@@ -80,6 +80,7 @@ public class Functions
         if (departmentName is null) continue;
         var customDays = school.CustomDays.FirstOrDefault(o => o.Year == year && o.Subject == subject)?.Days;
         var hasCustomDays = customDays is not null;
+        if (customDays == 0) continue;
         var cls = new Class(teamsClass.Id, name, year, teacherCodes, departmentName, hasCustomDays ? days[customDays.Value - 1] : startDate, hasCustomDays);
         classes.Add(cls);
       }
@@ -101,7 +102,7 @@ public class Functions
         var (body, perc) = messageGenerator.GenerateDepartmentEmail(department, curriculumLeaderFirstName, [.. departmentClasses]);
         if (string.IsNullOrEmpty(department.CurriculumLeader)) continue;
         var to = school.TeachersByCode[department.CurriculumLeader].Email;
-        mailer.Enqueue(to, $"{department.Name} {title} ({perc}%)", body);
+        //mailer.Enqueue(to, $"{department.Name} {title} ({perc}%)", body);
       }
 
       var (seniorTeamBody, seniorTeamPerc) = messageGenerator.GenerateSeniorTeamEmail();
@@ -113,7 +114,7 @@ public class Functions
         var teacherClasses = classes.Where(o => o.TeacherCodes.Contains(teacher.Code)).OrderBy(o => o.Year).ThenBy(o => o.Name).ToList();
         if (teacherClasses.Count == 0) continue;
         var body = messageGenerator.GenerateTeacherEmail(teacher, teacherClasses);
-        mailer.Enqueue(teacher.Email, title, body);
+        //mailer.Enqueue(teacher.Email, title, body);
       }
 
       await mailer.SendAsync();
@@ -125,7 +126,7 @@ public class Functions
 
   #if DEBUG
     const bool isDebug = true;
-    public static DateOnly Today { get; } = new(2024, 6, 9);
+    public static DateOnly Today { get; } = new(2024, 7, 8);
   #else
     const bool isDebug = false;
     public static DateOnly Today { get; } = DateOnly.FromDateTime(DateTime.Today);
