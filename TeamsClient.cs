@@ -1,5 +1,4 @@
 ﻿using Azure.Identity;
-using Grpc.Core;
 using Microsoft.Graph;
 using Microsoft.Graph.Beta;
 using Microsoft.Graph.Beta.Models;
@@ -36,9 +35,10 @@ public partial class TeamsClient(ClientSecretCredential credential)
       {
         var request = _client.Education.Classes[cls.Id].Assignments.ToGetRequestInformation(config =>
         {
-          config.QueryParameters.Filter = $"status eq 'assigned' and dueDateTime ge {cls.StartDate:yyyy-MM-dd}T00:00:00Z and dueDateTime le {endDate:yyyy-MM-dd}T23:59:59Z";
+          config.QueryParameters.Filter = $"status eq 'assigned' and dueDateTime le {endDate:yyyy-MM-dd}T23:59:59Z";
           config.QueryParameters.Select = ["displayName", "instructions", "dueDateTime"];
-          config.QueryParameters.Top = 10;
+          config.QueryParameters.Orderby = ["dueDateTime desc"];
+          config.QueryParameters.Top = 999;
         });
         requestIds.Add(cls, await batchContent.AddBatchRequestStepAsync(request));
       }
@@ -65,6 +65,8 @@ public partial class TeamsClient(ClientSecretCredential credential)
         if (assignments is null) continue;
         foreach (var assignment in assignments)
         {
+          var bodyTag = assignment.Instructions.Content.IndexOf("<body>", StringComparison.OrdinalIgnoreCase);
+          if (bodyTag > 0) assignment.Instructions.Content = assignment.Instructions.Content[bodyTag..];
           var instructions = HtmlTagRegex().Replace(assignment.Instructions.Content, " ");
           instructions = MultipleWhiteSpaceRegex().Replace(instructions, " ").Trim();
           if (instructions.Length > 200) instructions = instructions[..197].Trim() + "...";

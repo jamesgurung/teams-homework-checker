@@ -10,7 +10,7 @@ public class Mailer(string postmarkServerToken, string schoolCode, string fromEm
 
   public void Enqueue(string toEmail, string subject, string body)
   {
-    if (debugEmail is not null && ++_totalMessages > 2) return;
+    if (debugEmail is not null && ++_totalMessages > 3) return;
     if (_messages.Count >= 500) throw new InvalidOperationException("Too many messages queued");
     _messages.Add(new PostmarkMessage
     {

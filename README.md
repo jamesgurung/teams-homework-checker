@@ -27,9 +27,9 @@ Create a `config` blob container. For each school to be configured, add the foll
   "seniorTeam": ["Array", "of", "teacher", "initials", "in", "SLT"],
   "replyTo": "Initials of the teacher to receive email replies",
   "classFilter": "Filter for listing educationClass resources, e.g.: startswith(externalId,'23_24_')",
-  "defaultDays": 5,
-  "customDays": [
-    { "year": 7, "subject": "Cp", "days": 10 }
+  "defaultWeeks": 1,
+  "customWeeks": [
+    { "year": 7, "subject": "Cp", "weeks": 2 }
   ]
 }
 ```

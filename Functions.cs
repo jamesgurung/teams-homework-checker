@@ -1,13 +1,15 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
 using Azure.Identity;
 using Azure.Storage.Blobs;
 using Microsoft.Azure.Functions.Worker;
-using System.Text.Json;
 
 namespace TeamsHomeworkChecker;
 
 public class Functions
 {
   [Function("SendWeeklyEmails")]
+  [SuppressMessage("Style", "IDE0060:Remove unused parameter")]
   public static async Task SendWeeklyEmails([TimerTrigger("0 0 8 * * 1", RunOnStartup = isDebug)] TimerInfo timer, [BlobInput("config")] BlobContainerClient container)
   {
     var tenantId = Environment.GetEnvironmentVariable("TenantId");
@@ -27,9 +29,11 @@ public class Functions
     }
 
     var schoolCodes = blobs.Keys.Select(o => o.Split('-')[0]).Distinct().Select(o => o.ToUpperInvariant()).ToList();
+    var jsonCamelCase = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    var endDate = Today.AddDays(-1);
 
     foreach (var schoolCode in schoolCodes) {
-      var school = JsonSerializer.Deserialize<School>(blobs[$"{schoolCode}-settings.json"], new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+      var school = JsonSerializer.Deserialize<School>(blobs[$"{schoolCode}-settings.json"], jsonCamelCase);
       school.TeacherCodesByClass = GetCsv(blobs[$"{schoolCode}-classes.csv"]).Select(o => new ClassWithTeacher(o[0], o[1]))
         .Where(o => !string.IsNullOrWhiteSpace(o.TeacherCode)).GroupBy(o => o)
         .OrderByDescending(o => o.Count()).ThenBy(o => o.Key.TeacherCode).ToLookup(o => o.Key.ClassName, o => o.Key.TeacherCode);
@@ -45,20 +49,21 @@ public class Functions
         Console.WriteLine($"{schoolCode} - Skipped: missing teachers {string.Join(", ", missingTeachers)}.");
         continue;
       }
+
       if (!school.WorkingDays.Contains(Today))
       {
         Console.WriteLine($"{schoolCode} - Skipped: not a working day.");
         continue;
       }
-      var days = school.WorkingDays.Where(o => o < Today).OrderDescending().ToList();
-      var maxDaysNeeded = Math.Max(school.DefaultDays, school.CustomDays.Max(o => o.Days));
-      if (days.Count < maxDaysNeeded)
+
+      var pastMondays = school.WorkingDays.Where(o => o < Today).Select(o => o.AddDays(-((int)o.DayOfWeek + 6) % 7)).Distinct().OrderDescending().ToList();
+      var weeksNeeded = Math.Max(school.DefaultWeeks, school.CustomWeeks.Max(o => o.Weeks));
+      if (pastMondays.Count < weeksNeeded)
       {
-        Console.WriteLine($"{schoolCode} - Skipped: fewer than {maxDaysNeeded} days available.");
+        Console.WriteLine($"{schoolCode} - Skipped: fewer than {weeksNeeded} weeks available.");
         continue;
       }
-      var endDate = Today.AddDays(-1);
-      var startDate = days[school.DefaultDays - 1];
+      var startDate = pastMondays[school.DefaultWeeks - 1];
       var title = $"Homework due {startDate:d MMM} to {endDate:d MMM}";
 
       Console.WriteLine($"{schoolCode} - Retrieving classes...");
@@ -78,22 +83,39 @@ public class Functions
         var subject = name[(slash + 1)..(slash + 3)];
         var departmentName = school.Departments.FirstOrDefault(o => o.Subjects.Contains(subject))?.Name;
         if (departmentName is null) continue;
-        var customDays = school.CustomDays.FirstOrDefault(o => o.Year == year && o.Subject == subject)?.Days;
-        var hasCustomDays = customDays is not null;
-        if (customDays == 0) continue;
-        var cls = new Class(teamsClass.Id, name, year, teacherCodes, departmentName, hasCustomDays ? days[customDays.Value - 1] : startDate, hasCustomDays);
+        var classWeeks = school.CustomWeeks.FirstOrDefault(o => o.Year == year && o.Subject == subject)?.Weeks ?? school.DefaultWeeks;
+        if (classWeeks == 0) continue;
+        var cls = new Class(teamsClass.Id, name, year, teacherCodes, departmentName, classWeeks, classWeeks != school.DefaultWeeks);
         classes.Add(cls);
       }
 
       Console.WriteLine($"{schoolCode} - Retrieving homework...");
       await teams.PopulateHomeworkAsync(classes, endDate);
 
+      foreach (var cls in classes)
+      {
+        var oldIndex = cls.Weeks - 1;
+        var classStartDate = pastMondays[oldIndex];
+        cls.CurrentHomework = cls.Homework.Where(o => o.DueDate >= classStartDate).ToList();
+        cls.HasCurrentHomework = cls.CurrentHomework.Count > 0;
+        cls.Streak = 1;
+        var index = oldIndex + cls.Weeks;
+        while (index < pastMondays.Count && cls.Homework.Any(o => o.DueDate >= pastMondays[index] && o.DueDate < pastMondays[oldIndex]) == cls.HasCurrentHomework)
+        {
+          cls.Streak++;
+          oldIndex = index;
+          index += cls.Weeks;
+        }
+      }
+
       Console.WriteLine($"{schoolCode} - Sending emails...");
       var mailer = new Mailer(Environment.GetEnvironmentVariable("PostmarkServerToken"), schoolCode, $"{school.Name} <{school.FromEmail}>", school.TeachersByCode[school.ReplyTo].Email, debugEmail);
       var messageGenerator = new MessageGenerator(school.Name, startDate, endDate, classes);
 
       var departments = classes.OrderBy(o => o.Year).ThenBy(o => o.Name).GroupBy(o => o.DepartmentName)
-        .OrderByDescending(d => d.Average(c => c.Homework.Count > 0 ? 1 : 0)).ThenByDescending(d => d.Sum(c => c.Homework.Count > 0 ? 1 : 0));
+        .OrderByDescending(d => d.Average(c => c.HasCurrentHomework ? 1 : 0))
+        .ThenByDescending(d => d.Sum(c => c.HasCurrentHomework ? c.Streak : -c.Streak))
+        .ThenByDescending(d => d.Sum(c => c.HasCurrentHomework ? 1 : 0));
 
       foreach (var departmentClasses in departments)
       {
@@ -102,7 +124,7 @@ public class Functions
         var (body, perc) = messageGenerator.GenerateDepartmentEmail(department, curriculumLeaderFirstName, [.. departmentClasses]);
         if (string.IsNullOrEmpty(department.CurriculumLeader)) continue;
         var to = school.TeachersByCode[department.CurriculumLeader].Email;
-        //mailer.Enqueue(to, $"{department.Name} {title} ({perc}%)", body);
+        mailer.Enqueue(to, $"{department.Name} {title} ({perc}%)", body);
       }
 
       var (seniorTeamBody, seniorTeamPerc) = messageGenerator.GenerateSeniorTeamEmail();
@@ -114,7 +136,7 @@ public class Functions
         var teacherClasses = classes.Where(o => o.TeacherCodes.Contains(teacher.Code)).OrderBy(o => o.Year).ThenBy(o => o.Name).ToList();
         if (teacherClasses.Count == 0) continue;
         var body = messageGenerator.GenerateTeacherEmail(teacher, teacherClasses);
-        //mailer.Enqueue(teacher.Email, title, body);
+        mailer.Enqueue(teacher.Email, title, body);
       }
 
       await mailer.SendAsync();
@@ -126,7 +148,7 @@ public class Functions
 
   #if DEBUG
     const bool isDebug = true;
-    public static DateOnly Today { get; } = new(2024, 7, 8);
+    public static DateOnly Today { get; } = new(2024, 7, 15);
   #else
     const bool isDebug = false;
     public static DateOnly Today { get; } = DateOnly.FromDateTime(DateTime.Today);

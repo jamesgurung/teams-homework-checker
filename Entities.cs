@@ -8,8 +8,8 @@ public class School
   public List<string> SeniorTeam { get; init; }
   public string ReplyTo { get; init; }
   public string ClassFilter { get; init; }
-  public byte DefaultDays { get; init; }
-  public List<CustomDay> CustomDays { get; init; }
+  public byte DefaultWeeks { get; init; }
+  public List<CustomWeek> CustomWeeks { get; init; }
 
   public ILookup<string, string> TeacherCodesByClass { get; set; }
   public List<DateOnly> WorkingDays { get; set; }
@@ -17,11 +17,11 @@ public class School
   public Dictionary<string, Teacher> TeachersByCode { get; set; }
 }
 
-public class CustomDay
+public class CustomWeek
 {
   public byte Year { get; init; }
   public string Subject { get; init; }
-  public byte Days { get; init; }
+  public byte Weeks { get; init; }
 }
 
 public class Department(string name, string curriculumLeader, List<string> subjects)
@@ -42,14 +42,14 @@ public class Class
 {
   public Class() { }
 
-  public Class(string id, string name, byte year, List<string> teacherCodes, string departmentName, DateOnly startDate, bool hasCustomDays) {
+  public Class(string id, string name, byte year, List<string> teacherCodes, string departmentName, byte weeks, bool hasCustomWeeks) {
     Id = id;
     Name = name;
     Year = year;
     TeacherCodes = teacherCodes;
     DepartmentName = departmentName;
-    StartDate = startDate;
-    HasCustomDays = hasCustomDays;
+    Weeks = weeks;
+    HasCustomWeeks = hasCustomWeeks;
     Homework = [];
   }
 
@@ -59,8 +59,12 @@ public class Class
   public List<string> TeacherCodes { get; init; }
   public string DepartmentName { get; init; }
   public List<Homework> Homework { get; init; }
-  public DateOnly StartDate { get; init; }
-  public bool HasCustomDays { get; init; }
+  public byte Weeks { get; init; }
+  public bool HasCustomWeeks { get; init; }
+
+  public List<Homework> CurrentHomework { get; set; }
+  public bool HasCurrentHomework { get; set; }
+  public byte Streak { get; set; }
 }
 
 public record TeamsClass(string Id, string Name);

@@ -53,7 +53,7 @@ public class MessageGenerator
       for (var i = 0; i < classesInYear.Count; i++)
       {
         var cls = classesInYear[i];
-        body.Append($"{(cls.Homework.Count > 0 ? _tick : _cross)} {cls.Name} ({cls.TeacherCodes[0]})");
+        body.Append($"{(cls.HasCurrentHomework ? _tick : _cross)} {cls.Name} ({cls.TeacherCodes[0]}){GetStreakText(cls)}");
         if (i < classesInYear.Count - 1)
           body.Append("<br/>");
       }
@@ -65,11 +65,11 @@ public class MessageGenerator
     body.Append("</tr></table><br/><br/>");
     for (var year = 13; year >= 7; year--)
     {
-      if (!classesByYear[year].SelectMany(o => o.Homework).Any()) continue;
+      if (!classesByYear[year].Any(o => o.HasCurrentHomework)) continue;
       body.Append($"<b>{(year == 12 ? "Sixth Form" : $"Year {year}")} tasks:</b><br/><br/><ul style=\"margin: 0\">");
       foreach (var cls in classesByYear[year])
       {
-        foreach (var hw in cls.Homework)
+        foreach (var hw in cls.CurrentHomework)
         {
           body.Append($"<li><b>{cls.Name} &ndash; {hw.Title}</b> &ndash; {hw.Instructions} <i>(due {hw.DueDate:d MMM})</i></li>");
         }
@@ -93,9 +93,9 @@ public class MessageGenerator
     body.Append($"Hi {teacher.First}<br/><br/>Here is a summary of which classes have had homework set recently (due dates in the period {_startDate:d MMM} to {_endDate:d MMM}).<br/><br/>");
     foreach (var cls in classes)
     {
-      body.Append($"{(cls.Homework.Count > 0 ? _tick : _cross)} {cls.Name}{(cls.HasCustomDays ? " *" : string.Empty)}<br/>");
+      body.Append($"{(cls.HasCurrentHomework ? _tick : _cross)} {cls.Name}{(cls.HasCustomWeeks ? " *" : string.Empty)}{GetStreakText(cls)}<br/>");
     }
-    if (classes.Any(o => o.HasCustomDays))
+    if (classes.Any(o => o.HasCustomWeeks))
     {
       body.Append($"<br/>* = A customised range of due dates was used when checking this class.<br/>");
     }
@@ -112,7 +112,7 @@ public class MessageGenerator
     );
 
   private static int GetPercentage(IEnumerable<Class> classes) =>
-    (int)Math.Round(classes.Average(o => o.Homework.Count > 0 ? 1 : 0) * 100, 0);
+    (int)Math.Round(classes.Average(o => o.HasCurrentHomework ? 1 : 0) * 100, 0);
 
   private static string GetColour(int perc, bool isPrimary = false) =>
     perc switch
@@ -121,4 +121,9 @@ public class MessageGenerator
       < 80 => isPrimary ? "#ffcd33" : "#fff0c2",
       _ => isPrimary ? "#3aff2a" : "#d0ffcc"
     };
+
+  private static string GetStreakText(Class cls) =>
+    cls.Streak == 1 ? string.Empty : (cls.HasCurrentHomework
+      ? $" <b>&#x1F525;{cls.Streak}</b>"
+      : $" <span style=\"font-weight: bold; color: red\">({cls.Streak})</span>");
 }
