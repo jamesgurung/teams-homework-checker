@@ -10,6 +10,7 @@ public class School
   public string ClassFilter { get; init; }
   public byte DefaultWeeks { get; init; }
   public List<CustomWeek> CustomWeeks { get; init; }
+  public List<Exclude> Excludes { get; init; }
 
   public ILookup<string, string> TeacherCodesByClass { get; set; }
   public List<DateOnly> WorkingDays { get; set; }
@@ -22,6 +23,13 @@ public class CustomWeek
   public byte Year { get; init; }
   public string Subject { get; init; }
   public byte Weeks { get; init; }
+}
+
+public class Exclude
+{
+  public byte Year { get; init; }
+  public string Subject { get; init; }
+  public string Content { get; init; }
 }
 
 public class Department(string name, string curriculumLeader, List<string> subjects)
@@ -42,7 +50,7 @@ public class Class
 {
   public Class() { }
 
-  public Class(string id, string name, byte year, List<string> teacherCodes, string departmentName, byte weeks, bool hasCustomWeeks) {
+  public Class(string id, string name, byte year, List<string> teacherCodes, string departmentName, byte weeks, bool hasCustomWeeks, string excludeText) {
     Id = id;
     Name = name;
     Year = year;
@@ -50,6 +58,7 @@ public class Class
     DepartmentName = departmentName;
     Weeks = weeks;
     HasCustomWeeks = hasCustomWeeks;
+    ExcludeText = excludeText;
     Homework = [];
   }
 
@@ -61,6 +70,7 @@ public class Class
   public List<Homework> Homework { get; init; }
   public byte Weeks { get; init; }
   public bool HasCustomWeeks { get; init; }
+  public string ExcludeText { get; set; }
 
   public List<Homework> CurrentHomework { get; set; }
   public bool HasCurrentHomework { get; set; }

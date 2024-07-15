@@ -30,6 +30,9 @@ Create a `config` blob container. For each school to be configured, add the foll
   "defaultWeeks": 1,
   "customWeeks": [
     { "year": 7, "subject": "Cp", "weeks": 2 }
+  ],
+  "excludes": [
+    { "year": 11, "subject": "Ma", "content": "Revise" }
   ]
 }
 ```

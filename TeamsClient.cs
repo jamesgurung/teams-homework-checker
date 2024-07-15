@@ -69,6 +69,7 @@ public partial class TeamsClient(ClientSecretCredential credential)
           if (bodyTag > 0) assignment.Instructions.Content = assignment.Instructions.Content[bodyTag..];
           var instructions = HtmlTagRegex().Replace(assignment.Instructions.Content, " ");
           instructions = MultipleWhiteSpaceRegex().Replace(instructions, " ").Trim();
+          if (cls.ExcludeText is not null && instructions.Contains(cls.ExcludeText, StringComparison.OrdinalIgnoreCase)) continue;
           if (instructions.Length > 200) instructions = instructions[..197].Trim() + "...";
           cls.Homework.Add(new(assignment.DisplayName.Trim(), instructions, DateOnly.FromDateTime(assignment.DueDateTime.Value.Date)));
         }

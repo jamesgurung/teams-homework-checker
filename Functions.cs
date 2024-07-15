@@ -85,7 +85,8 @@ public class Functions
         if (departmentName is null) continue;
         var classWeeks = school.CustomWeeks.FirstOrDefault(o => o.Year == year && o.Subject == subject)?.Weeks ?? school.DefaultWeeks;
         if (classWeeks == 0) continue;
-        var cls = new Class(teamsClass.Id, name, year, teacherCodes, departmentName, classWeeks, classWeeks != school.DefaultWeeks);
+        var excludeText = school.Excludes.FirstOrDefault(o => o.Year == year && o.Subject == subject)?.Content;
+        var cls = new Class(teamsClass.Id, name, year, teacherCodes, departmentName, classWeeks, classWeeks != school.DefaultWeeks, excludeText);
         classes.Add(cls);
       }
 
@@ -148,7 +149,7 @@ public class Functions
 
   #if DEBUG
     const bool isDebug = true;
-    public static DateOnly Today { get; } = new(2024, 7, 15);
+    public static DateOnly Today { get; } = new(2024, 7, 22);
   #else
     const bool isDebug = false;
     public static DateOnly Today { get; } = DateOnly.FromDateTime(DateTime.Today);
