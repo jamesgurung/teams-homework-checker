@@ -22,7 +22,6 @@ Create a `config` blob container. For each school to be configured, add the foll
 ```json
 {
   "name": "Your School Name",
-  "id": "The ID of your educationSchool resource in the Microsoft Graph API",
   "fromEmail": "Address from which to send summary emails",
   "seniorTeam": ["Array", "of", "teacher", "initials", "in", "SLT"],
   "replyTo": "Initials of the teacher to receive email replies",

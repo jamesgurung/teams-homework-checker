@@ -3,7 +3,6 @@
 public class School
 {
   public string Name { get; init; }
-  public string Id { get; init; }
   public string FromEmail { get; init; }
   public List<string> SeniorTeam { get; init; }
   public string ReplyTo { get; init; }
@@ -50,14 +49,13 @@ public class Class
 {
   public Class() { }
 
-  public Class(string id, string name, byte year, List<string> teacherCodes, string departmentName, byte weeks, bool hasCustomWeeks, string excludeText) {
+  public Class(string id, string name, byte year, List<string> teacherCodes, string departmentName, byte weeks, string excludeText) {
     Id = id;
     Name = name;
     Year = year;
     TeacherCodes = teacherCodes;
     DepartmentName = departmentName;
     Weeks = weeks;
-    HasCustomWeeks = hasCustomWeeks;
     ExcludeText = excludeText;
     Homework = [];
   }
@@ -69,9 +67,9 @@ public class Class
   public string DepartmentName { get; init; }
   public List<Homework> Homework { get; init; }
   public byte Weeks { get; init; }
-  public bool HasCustomWeeks { get; init; }
   public string ExcludeText { get; set; }
 
+  public DateOnly StartDate { get; set; }
   public List<Homework> CurrentHomework { get; set; }
   public bool HasCurrentHomework { get; set; }
   public byte Streak { get; set; }

@@ -18,20 +18,22 @@ public class MessageGenerator
   private static readonly string _cross = "&#10060;";
 
   private readonly string _schoolName;
-  private readonly DateOnly _startDate;
   private readonly DateOnly _endDate;
+  private readonly byte _defaultWeeks;
+  private readonly List<Class> _allClasses;
   private readonly StringBuilder _seniorTeam;
 
   private readonly int _overallPercentage;
 
-  public MessageGenerator(string schoolName, DateOnly startDate, DateOnly endDate, List<Class> allClasses)
+  public MessageGenerator(string schoolName, DateOnly endDate, byte defaultWeeks, List<Class> allClasses)
   {
     _schoolName = schoolName;
-    _startDate = startDate;
     _endDate = endDate;
+    _defaultWeeks = defaultWeeks;
+    _allClasses = allClasses;
     var (perc, ks3perc, ks4perc, ks5perc) = GetPercentages(allClasses);    
     _seniorTeam = new($"{_htmlStart}{_tableStart}<tr>" +
-    $"<td style=\"{_td}; text-align:center; width: 10%; background-color: {GetColour(perc, true)}\"><b>HOMEWORK</b></td>" +
+    $"<td style=\"{_td}; text-align:center; width: 10%; background-color: {GetColour(perc, true)}\"></td>" +
     $"<td colspan=\"3\" style=\"{_td}; text-align:center; background-color: {GetColour(ks3perc)}\"><b>Key Stage 3</b> ({ks3perc}%)</td>" +
     $"<td colspan=\"2\" style=\"{_td}; text-align:center; background-color: {GetColour(ks4perc)}\"><b>Key Stage 4</b> ({ks4perc}%)</td>" +
     $"<td style=\"{_td}; text-align:center; background-color: {GetColour(ks5perc)}\"><b>Key Stage 5</b> ({ks5perc}%)</td>" +
@@ -53,20 +55,27 @@ public class MessageGenerator
       for (var i = 0; i < classesInYear.Count; i++)
       {
         var cls = classesInYear[i];
-        body.Append($"{(cls.HasCurrentHomework ? _tick : _cross)} {cls.Name} ({cls.TeacherCodes[0]}){GetStreakText(cls)}");
+        body.Append($"{(cls.HasCurrentHomework ? _tick : _cross)} {cls.Name} ({cls.TeacherCodes[0]}){GetSuperscript(cls.Weeks, true)}{GetStreakText(cls)}");
         if (i < classesInYear.Count - 1)
           body.Append("<br/>");
       }
       body.Append("</td>");
     }
+    body.Append("</tr>");
     _seniorTeam.Append(body);
-    body.Insert(0, $"{_htmlStart}Hi {curriculumLeaderFirstName}<br/><br/>This table shows which {department.Name} classes have been set homework recently." +
-      $"<br/><br/>{_tableStart}");
-    body.Append("</tr></table><br/><br/>");
+    
+    body.Insert(0, $"{_htmlStart}Hi {curriculumLeaderFirstName}<br/><br/>This table shows which {department.Name} classes have had homework due recently." +
+      $"<br/><br/>{_tableStart}<tr><td style=\"{_td}; text-align:center; width: 10%\"></td><td colspan=\"3\" style=\"{_td}; text-align:center\"><b>Key Stage 3</b></td>" +
+      $"<td colspan=\"2\" style=\"{_td}; text-align:center\"><b>Key Stage 4</b></td><td style=\"{_td}; text-align:center\"><b>Key Stage 5</b></td></tr>");
+    
+    body.Append("</tr></table><br/>");
+    AppendCheckingDatesDescription(body, classes);
+    body.Append("<br/><br/>");
+
     for (var year = 13; year >= 7; year--)
     {
       if (!classesByYear[year].Any(o => o.HasCurrentHomework)) continue;
-      body.Append($"<b>{(year == 12 ? "Sixth Form" : $"Year {year}")} tasks:</b><br/><br/><ul style=\"margin: 0\">");
+      body.Append($"{(year == 12 ? "Sixth Form" : $"Year {year}")} tasks:<br/><br/><ul style=\"margin: 0\">");
       foreach (var cls in classesByYear[year])
       {
         foreach (var hw in cls.CurrentHomework)
@@ -83,25 +92,44 @@ public class MessageGenerator
 
   public (string Body, int Percentage) GenerateSeniorTeamEmail()
   {
-    _seniorTeam.Append($"</table>{_htmlEnd}");
+    _seniorTeam.Append($"</table><br/>");
+    AppendCheckingDatesDescription(_seniorTeam, _allClasses);
+    _seniorTeam.Append(_htmlEnd);
     return (_seniorTeam.ToString(), _overallPercentage);
   }
 
   public string GenerateTeacherEmail(Teacher teacher, List<Class> classes)
   {
     var body = new StringBuilder(_htmlStart);
-    body.Append($"Hi {teacher.First}<br/><br/>Here is a summary of which classes have had homework set recently (due dates in the period {_startDate:d MMM} to {_endDate:d MMM}).<br/><br/>");
+    body.Append($"Hi {teacher.First}<br/><br/>Here is a summary of which classes have had homework recently.<br/><br/>");
     foreach (var cls in classes)
     {
-      body.Append($"{(cls.HasCurrentHomework ? _tick : _cross)} {cls.Name}{(cls.HasCustomWeeks ? " *" : string.Empty)}{GetStreakText(cls)}<br/>");
+      body.Append($"{(cls.HasCurrentHomework ? _tick : _cross)} {cls.Name}{GetSuperscript(cls.Weeks, true)}{GetStreakText(cls)}<br/>");
     }
-    if (classes.Any(o => o.HasCustomWeeks))
-    {
-      body.Append($"<br/>* = A customised range of due dates was used when checking this class.<br/>");
-    }
+    body.Append("<br/>");
+    AppendCheckingDatesDescription(body, classes);
     body.Append($"<br/>Best wishes<br/><br/>{_schoolName}{_htmlEnd}");
     return body.ToString();
   }
+
+  private void AppendCheckingDatesDescription(StringBuilder sb, List<Class> classes)
+  {
+    var periods = classes.Select(o => (o.Weeks, o.StartDate)).DistinctBy(o => o.Weeks).OrderBy(o => o.Weeks);
+    var defaultPeriod = periods.FirstOrDefault(o => o.Weeks == _defaultWeeks);
+    if (defaultPeriod != default)
+    {
+      sb.Append($"Each class shows a tick if there was at least one assignment with a due date between {defaultPeriod.StartDate:d MMMM} and {_endDate:d MMMM}.<br/>");
+    }
+    foreach (var (weeks, startDate) in periods.Where(o => o.Weeks != _defaultWeeks))
+    {
+      var title = weeks == 1 ? "weekly" : weeks == 2 ? "fortnightly" : $"{weeks}-weekly";
+      sb.Append($"{GetSuperscript(weeks)} Note: {title} homework shows a tick if there was at least one assignment " +
+        $"with a due date between {startDate:d MMMM} and {_endDate:d MMMM}.<br/>");
+    }
+  }
+
+  private string GetSuperscript(int weeks, bool includeSpace = false) =>
+    weeks == _defaultWeeks ? string.Empty : $"{(includeSpace ? " " : string.Empty)}<sup>{(weeks == 1 ? "W" : weeks == 2 ? "F" : weeks)}</sup>";
 
   private static (int Overall, int KS3, int KS4, int KS5) GetPercentages(IEnumerable<Class> classes) =>
     (

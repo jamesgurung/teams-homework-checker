@@ -12,8 +12,8 @@ public partial class TeamsClient(ClientSecretCredential credential)
 {
   private readonly GraphServiceClient _client = new(credential);
 
-  public async Task<List<TeamsClass>> ListClassesAsync(string schoolId, string classFilter) {
-    var response = await _client.Education.Schools[schoolId].Classes.GetAsync(config => {
+  public async Task<List<TeamsClass>> ListClassesAsync(string classFilter) {
+    var response = await _client.Education.Classes.GetAsync(config => {
       config.QueryParameters.Filter = classFilter;
       config.QueryParameters.Select = ["id", "externalName"];
       config.QueryParameters.Top = 999;

@@ -63,11 +63,9 @@ public class Functions
         Console.WriteLine($"{schoolCode} - Skipped: fewer than {weeksNeeded} weeks available.");
         continue;
       }
-      var startDate = pastMondays[school.DefaultWeeks - 1];
-      var title = $"Homework due {startDate:d MMM} to {endDate:d MMM}";
 
       Console.WriteLine($"{schoolCode} - Retrieving classes...");
-      var teamsClasses = await teams.ListClassesAsync(school.Id, school.ClassFilter);
+      var teamsClasses = await teams.ListClassesAsync(school.ClassFilter);
       var isSummer = Today.Month is 6 or 7;
       var classes = new List<Class>();
 
@@ -86,7 +84,7 @@ public class Functions
         var classWeeks = school.CustomWeeks.FirstOrDefault(o => o.Year == year && o.Subject == subject)?.Weeks ?? school.DefaultWeeks;
         if (classWeeks == 0) continue;
         var excludeText = school.Excludes.FirstOrDefault(o => o.Year == year && o.Subject == subject)?.Content;
-        var cls = new Class(teamsClass.Id, name, year, teacherCodes, departmentName, classWeeks, classWeeks != school.DefaultWeeks, excludeText);
+        var cls = new Class(teamsClass.Id, name, year, teacherCodes, departmentName, classWeeks, excludeText);
         classes.Add(cls);
       }
 
@@ -96,8 +94,8 @@ public class Functions
       foreach (var cls in classes)
       {
         var oldIndex = cls.Weeks - 1;
-        var classStartDate = pastMondays[oldIndex];
-        cls.CurrentHomework = cls.Homework.Where(o => o.DueDate >= classStartDate).ToList();
+        cls.StartDate = pastMondays[oldIndex];
+        cls.CurrentHomework = cls.Homework.Where(o => o.DueDate >= cls.StartDate).ToList();
         cls.HasCurrentHomework = cls.CurrentHomework.Count > 0;
         cls.Streak = 1;
         var index = oldIndex + cls.Weeks;
@@ -111,7 +109,7 @@ public class Functions
 
       Console.WriteLine($"{schoolCode} - Sending emails...");
       var mailer = new Mailer(Environment.GetEnvironmentVariable("PostmarkServerToken"), schoolCode, $"{school.Name} <{school.FromEmail}>", school.TeachersByCode[school.ReplyTo].Email, debugEmail);
-      var messageGenerator = new MessageGenerator(school.Name, startDate, endDate, classes);
+      var messageGenerator = new MessageGenerator(school.Name, endDate, school.DefaultWeeks, classes);
 
       var departments = classes.OrderBy(o => o.Year).ThenBy(o => o.Name).GroupBy(o => o.DepartmentName)
         .OrderByDescending(d => d.Average(c => c.HasCurrentHomework ? 1 : 0))
@@ -125,19 +123,19 @@ public class Functions
         var (body, perc) = messageGenerator.GenerateDepartmentEmail(department, curriculumLeaderFirstName, [.. departmentClasses]);
         if (string.IsNullOrEmpty(department.CurriculumLeader)) continue;
         var to = school.TeachersByCode[department.CurriculumLeader].Email;
-        mailer.Enqueue(to, $"{department.Name} {title} ({perc}%)", body);
+        mailer.Enqueue(to, $"{department.Name} Homework Tracker ({perc}%)", body);
       }
 
       var (seniorTeamBody, seniorTeamPerc) = messageGenerator.GenerateSeniorTeamEmail();
       var seniorTeamTo = string.Join(',', school.SeniorTeam.Select(o => school.TeachersByCode[o].Email));
-      mailer.Enqueue(seniorTeamTo, $"{title} ({seniorTeamPerc}%)", seniorTeamBody);
+      mailer.Enqueue(seniorTeamTo, $"Weekly Homework Tracker ({seniorTeamPerc}%)", seniorTeamBody);
 
       foreach (var teacher in school.TeachersByCode.Values)
       {
         var teacherClasses = classes.Where(o => o.TeacherCodes.Contains(teacher.Code)).OrderBy(o => o.Year).ThenBy(o => o.Name).ToList();
         if (teacherClasses.Count == 0) continue;
         var body = messageGenerator.GenerateTeacherEmail(teacher, teacherClasses);
-        mailer.Enqueue(teacher.Email, title, body);
+        mailer.Enqueue(teacher.Email, "Your homework set", body);
       }
 
       await mailer.SendAsync();
@@ -149,7 +147,7 @@ public class Functions
 
   #if DEBUG
     const bool isDebug = true;
-    public static DateOnly Today { get; } = new(2024, 7, 22);
+    public static DateOnly Today { get; } = new(2024, 9, 16);
   #else
     const bool isDebug = false;
     public static DateOnly Today { get; } = DateOnly.FromDateTime(DateTime.Today);
