@@ -37,8 +37,8 @@ public class Functions
       school.TeacherCodesByClass = GetCsv(blobs[$"{schoolCode}-classes.csv"]).Select(o => new ClassWithTeacher(o[0], o[1]))
         .Where(o => !string.IsNullOrWhiteSpace(o.TeacherCode)).GroupBy(o => o)
         .OrderByDescending(o => o.Count()).ThenBy(o => o.Key.TeacherCode).ToLookup(o => o.Key.ClassName, o => o.Key.TeacherCode);
-      school.WorkingDays = GetLines(blobs[$"{schoolCode}-days.csv"]).Select(o => DateOnly.ParseExact(o, "yyyy-MM-dd")).ToList();
-      school.Departments = GetCsv(blobs[$"{schoolCode}-departments.csv"]).Select(o => new Department(o[0], o[1], [.. o[2].Split(';')])).ToList();
+      school.WorkingDays = [.. GetLines(blobs[$"{schoolCode}-days.csv"]).Select(o => DateOnly.ParseExact(o, "yyyy-MM-dd"))];
+      school.Departments = [.. GetCsv(blobs[$"{schoolCode}-departments.csv"]).Select(o => new Department(o[0], o[1], [.. o[2].Split(';')]))];
       school.TeachersByCode = GetCsv(blobs[$"{schoolCode}-teachers.csv"]).ToDictionary(o => o[0], o => new Teacher(o[0], o[1], o[2]));
 
       var missingTeachers = school.TeacherCodesByClass.SelectMany(o => o).Concat(school.Departments.Select(o => o.CurriculumLeader))
@@ -72,7 +72,7 @@ public class Functions
       foreach (var teamsClass in teamsClasses)
       {
         var name = teamsClass.Name[(teamsClass.Name.LastIndexOf(' ') + 1)..].Replace('_', '/');
-        if (!byte.TryParse(new string(name.TakeWhile(char.IsDigit).ToArray()), out var year)) continue;
+        if (!byte.TryParse(new string([.. name.TakeWhile(char.IsDigit)]), out var year)) continue;
         if (isSummer && year is 11 or 13) continue;
         var teacherCodes = school.TeacherCodesByClass[name].ToList();
         if (teacherCodes.Count == 0) continue;
@@ -95,7 +95,7 @@ public class Functions
       {
         var oldIndex = cls.Weeks - 1;
         cls.StartDate = pastMondays[oldIndex];
-        cls.CurrentHomework = cls.Homework.Where(o => o.DueDate >= cls.StartDate).ToList();
+        cls.CurrentHomework = [.. cls.Homework.Where(o => o.DueDate >= cls.StartDate)];
         cls.HasCurrentHomework = cls.CurrentHomework.Count > 0;
         cls.Streak = 1;
         var index = oldIndex + cls.Weeks;
@@ -147,7 +147,7 @@ public class Functions
 
   #if DEBUG
     const bool isDebug = true;
-    public static DateOnly Today { get; } = new(2024, 9, 16);
+    public static DateOnly Today { get; } = new(2025, 1, 13);
   #else
     const bool isDebug = false;
     public static DateOnly Today { get; } = DateOnly.FromDateTime(DateTime.Today);

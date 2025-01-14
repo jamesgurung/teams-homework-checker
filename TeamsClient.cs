@@ -19,7 +19,7 @@ public partial class TeamsClient(ClientSecretCredential credential)
       config.QueryParameters.Top = 999;
     });
     var classes = await IterateAsync<EducationClass, EducationClassCollectionResponse>(response);
-    return classes.Select(o => new TeamsClass(o.Id, o.ExternalName)).ToList();
+    return [.. classes.Select(o => new TeamsClass(o.Id, o.ExternalName))];
   }
 
   public async Task PopulateHomeworkAsync(IEnumerable<Class> classes, DateOnly endDate)
