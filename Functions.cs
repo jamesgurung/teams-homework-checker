@@ -3,14 +3,15 @@ using System.Text.Json;
 using Azure.Identity;
 using Azure.Storage.Blobs;
 using Microsoft.Azure.Functions.Worker;
+using Microsoft.Extensions.Logging;
 
 namespace TeamsHomeworkChecker;
 
-public class Functions
+public class Functions(ILogger<Functions> logger)
 {
   [Function("SendWeeklyEmails")]
   [SuppressMessage("Style", "IDE0060:Remove unused parameter")]
-  public static async Task SendWeeklyEmails([TimerTrigger("0 0 8 * * 1", RunOnStartup = isDebug)] TimerInfo timer, [BlobInput("config")] BlobContainerClient container)
+  public async Task SendWeeklyEmails([TimerTrigger("0 0 8 * * 1", RunOnStartup = isDebug)] TimerInfo timer, [BlobInput("config")] BlobContainerClient container)
   {
     var tenantId = Environment.GetEnvironmentVariable("TenantId");
     var clientId = Environment.GetEnvironmentVariable("ClientId");
@@ -46,13 +47,13 @@ public class Functions
 
       if (missingTeachers.Count > 0)
       {
-        Console.WriteLine($"{schoolCode} - Skipped: missing teachers {string.Join(", ", missingTeachers)}.");
+        logger.LogWarning("{School} - Skipped: missing teachers {Teachers}.", schoolCode, string.Join(", ", missingTeachers));
         continue;
       }
 
       if (!school.WorkingDays.Contains(Today))
       {
-        Console.WriteLine($"{schoolCode} - Skipped: not a working day.");
+        logger.LogWarning("{School} - Skipped: not a working day.", schoolCode);
         continue;
       }
 
@@ -60,11 +61,11 @@ public class Functions
       var weeksNeeded = Math.Max(school.DefaultWeeks, school.CustomWeeks.Max(o => o.Weeks));
       if (pastMondays.Count < weeksNeeded)
       {
-        Console.WriteLine($"{schoolCode} - Skipped: fewer than {weeksNeeded} weeks available.");
+        logger.LogWarning("{School} - Skipped: fewer than {WeeksNeeded} weeks available.", schoolCode, weeksNeeded);
         continue;
       }
 
-      Console.WriteLine($"{schoolCode} - Retrieving classes...");
+      logger.LogInformation("{School} - Retrieving classes...", schoolCode);
       var teamsClasses = await teams.ListClassesAsync(school.ClassFilter);
       var isSummer = Today.Month is 6 or 7;
       var classes = new List<Class>();
@@ -88,7 +89,7 @@ public class Functions
         classes.Add(cls);
       }
 
-      Console.WriteLine($"{schoolCode} - Retrieving homework...");
+      logger.LogInformation("{School} - Retrieving homework...", schoolCode);
       await teams.PopulateHomeworkAsync(classes, endDate);
 
       foreach (var cls in classes)
@@ -107,7 +108,7 @@ public class Functions
         }
       }
 
-      Console.WriteLine($"{schoolCode} - Sending emails...");
+      logger.LogInformation("{School} - Sending emails...", schoolCode);
       var mailer = new Mailer(Environment.GetEnvironmentVariable("PostmarkServerToken"), schoolCode, $"{school.Name} <{school.FromEmail}>", school.TeachersByCode[school.ReplyTo].Email, debugEmail);
       var messageGenerator = new MessageGenerator(school.Name, endDate, school.DefaultWeeks, classes);
 
@@ -147,7 +148,7 @@ public class Functions
 
   #if DEBUG
     const bool isDebug = true;
-    public static DateOnly Today { get; } = new(2025, 1, 13);
+    public static DateOnly Today { get; } = new(2025, 4, 7);
   #else
     const bool isDebug = false;
     public static DateOnly Today { get; } = DateOnly.FromDateTime(DateTime.Today);
