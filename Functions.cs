@@ -148,7 +148,7 @@ public class Functions(ILogger<Functions> logger)
 
   #if DEBUG
     const bool isDebug = true;
-    public static DateOnly Today { get; } = new(2025, 4, 7);
+    public static DateOnly Today { get; } = new(2025, 6, 23);
   #else
     const bool isDebug = false;
     public static DateOnly Today { get; } = DateOnly.FromDateTime(DateTime.Today);
