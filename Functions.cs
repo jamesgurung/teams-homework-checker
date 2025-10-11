@@ -67,12 +67,12 @@ public class Functions(ILogger<Functions> logger)
 
       logger.LogInformation("{School} - Retrieving classes...", schoolCode);
       var teamsClasses = await teams.ListClassesAsync(school.ClassFilter);
-      var isSummer = Today.Month is 6 or 7;
+      var isSummer = Today.Month is 5 or 6 or 7;
       var classes = new List<Class>();
 
       foreach (var teamsClass in teamsClasses)
       {
-        var name = teamsClass.Name[(teamsClass.Name.LastIndexOf(' ') + 1)..].Replace('_', '/');
+        var name = teamsClass.Name[school.ClassFilter.Length..].Replace('_', '/').Replace('-', '/');
         if (!byte.TryParse(new string([.. name.TakeWhile(char.IsDigit)]), out var year)) continue;
         if (isSummer && year is 11 or 13) continue;
         var teacherCodes = school.TeacherCodesByClass[name].ToList();
@@ -148,7 +148,7 @@ public class Functions(ILogger<Functions> logger)
 
   #if DEBUG
     const bool isDebug = true;
-    public static DateOnly Today { get; } = new(2025, 6, 23);
+    public static DateOnly Today { get; } = new(2025, 10, 13);
   #else
     const bool isDebug = false;
     public static DateOnly Today { get; } = DateOnly.FromDateTime(DateTime.Today);

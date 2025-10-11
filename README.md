@@ -25,7 +25,7 @@ Create a `config` blob container. For each school to be configured, add the foll
   "fromEmail": "Address from which to send summary emails",
   "seniorTeam": ["Array", "of", "teacher", "initials", "in", "SLT"],
   "replyTo": "Initials of the teacher to receive email replies",
-  "classFilter": "Filter for listing educationClass resources, e.g.: startswith(externalId,'23_24_')",
+  "classFilter": "Prefix filter for educationClass resources, e.g.: 2025-",
   "defaultWeeks": 1,
   "customWeeks": [
     { "year": 7, "subject": "Cp", "weeks": 2 }

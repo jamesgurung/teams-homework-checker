@@ -14,12 +14,12 @@ public partial class TeamsClient(ClientSecretCredential credential)
 
   public async Task<List<TeamsClass>> ListClassesAsync(string classFilter) {
     var response = await _client.Education.Classes.GetAsync(config => {
-      config.QueryParameters.Filter = classFilter;
-      config.QueryParameters.Select = ["id", "externalName"];
+      config.QueryParameters.Filter = $"startswith(externalId,'{classFilter}')";
+      config.QueryParameters.Select = ["id", "externalId"];
       config.QueryParameters.Top = 999;
     });
     var classes = await IterateAsync<EducationClass, EducationClassCollectionResponse>(response);
-    return [.. classes.Select(o => new TeamsClass(o.Id, o.ExternalName))];
+    return [.. classes.Select(o => new TeamsClass(o.Id, o.ExternalId))];
   }
 
   public async Task PopulateHomeworkAsync(IEnumerable<Class> classes, DateOnly endDate)
