@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <AzureFunctionsVersion>v4</AzureFunctionsVersion>
@@ -7,11 +7,11 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Azure.Identity" Version="1.17.0" />
-    <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="2.50.0-preview1" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="2.50.0-preview2" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Storage.Blobs" Version="6.8.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Timer" Version="4.3.1" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="2.0.5" />
-    <PackageReference Include="Microsoft.Graph.Beta" Version="5.123.0-preview" />
+    <PackageReference Include="Microsoft.Graph.Beta" Version="5.124.0-preview" />
     <PackageReference Include="Postmark" Version="5.2.0" />
   </ItemGroup>
   <ItemGroup>

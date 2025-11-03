@@ -50,7 +50,8 @@ public partial class TeamsClient(ClientSecretCredential credential)
         var delay = 0;
         foreach (var id in throttledRequestIds) {
           using var throttledResponse = await response.GetResponseByIdAsync(id);
-          delay = Math.Max(delay, (int)throttledResponse.Headers.RetryAfter.Delta.Value.TotalMilliseconds);
+          var retryAfter = (int)(throttledResponse.Headers?.RetryAfter?.Delta?.TotalMilliseconds ?? 0);
+          delay = Math.Max(delay, retryAfter);
         }
         Console.WriteLine($"Throttled, waiting {delay}ms...");
         await Task.Delay(delay);
