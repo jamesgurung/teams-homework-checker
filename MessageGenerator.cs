@@ -45,7 +45,8 @@ public class MessageGenerator
   {
     var classesByYear = classes.ToLookup(o => o.Year == 13 ? 12 : o.Year);
     var perc = GetPercentage(classes);
-    var name = string.IsNullOrEmpty(department.CurriculumLeader) ? department.Name : $"{department.Name} ({department.CurriculumLeader})";
+    var departmentName = Encode(department.Name);
+    var name = string.IsNullOrEmpty(department.CurriculumLeader) ? departmentName : $"{departmentName} ({Encode(department.CurriculumLeader)})";
     var body = new StringBuilder($"<tr><td style=\"{_td}; width: 10%; background-color: {GetColour(perc)}\"><b>{name}</b><br/>{perc}%</td>");
     for (var year = 7; year <= 12; year++)
     {
@@ -55,7 +56,7 @@ public class MessageGenerator
       for (var i = 0; i < classesInYear.Count; i++)
       {
         var cls = classesInYear[i];
-        body.Append($"{(cls.HasCurrentHomework ? _tick : _cross)} {cls.Name} ({cls.TeacherCodes[0]}){GetSuperscript(cls.Weeks, true)}{GetStreakText(cls)}");
+        body.Append($"{(cls.HasCurrentHomework ? _tick : _cross)} {Encode(cls.Name)} ({Encode(cls.TeacherCodes[0])}){GetSuperscript(cls.Weeks, true)}{GetStreakText(cls)}");
         if (i < classesInYear.Count - 1)
           body.Append("<br/>");
       }
@@ -64,11 +65,11 @@ public class MessageGenerator
     body.Append("</tr>");
     _seniorTeam.Append(body);
     
-    body.Insert(0, $"{_htmlStart}Hi {curriculumLeaderFirstName}<br/><br/>This table shows which {department.Name} classes have had homework due recently." +
+    body.Insert(0, $"{_htmlStart}Hi {Encode(curriculumLeaderFirstName)}<br/><br/>This table shows which {departmentName} classes have had homework due recently." +
       $"<br/><br/>{_tableStart}<tr><td style=\"{_td}; text-align:center; width: 10%\"></td><td colspan=\"3\" style=\"{_td}; text-align:center\"><b>Key Stage 3</b></td>" +
       $"<td colspan=\"2\" style=\"{_td}; text-align:center\"><b>Key Stage 4</b></td><td style=\"{_td}; text-align:center\"><b>Key Stage 5</b></td></tr>");
     
-    body.Append("</tr></table><br/>");
+    body.Append("</table><br/>");
     AppendCheckingDatesDescription(body, classes);
     body.Append("<br/><br/>");
 
@@ -80,12 +81,12 @@ public class MessageGenerator
       {
         foreach (var hw in cls.CurrentHomework)
         {
-          body.Append($"<li><b>{cls.Name} &ndash; {hw.Title}</b> &ndash; {hw.Instructions} <i>(due {hw.DueDate:d MMM})</i></li>");
+          body.Append($"<li><b>{Encode(cls.Name)} &ndash; {Encode(hw.Title)}</b> &ndash; {Encode(hw.Instructions)} <i>(due {hw.DueDate:d MMM})</i></li>");
         }
       }
       body.Append("</ul><br/>");
     }
-    body.Append($"Best wishes<br/><br/>{_schoolName}{_htmlEnd}");
+    body.Append($"Best wishes<br/><br/>{Encode(_schoolName)}{_htmlEnd}");
 
     return (body.ToString(), perc);
   }
@@ -101,14 +102,14 @@ public class MessageGenerator
   public string GenerateTeacherEmail(Teacher teacher, List<Class> classes)
   {
     var body = new StringBuilder(_htmlStart);
-    body.Append($"Hi {teacher.First}<br/><br/>Here is a summary of which classes have had homework recently.<br/><br/>");
+    body.Append($"Hi {Encode(teacher.First)}<br/><br/>Here is a summary of which classes have had homework recently.<br/><br/>");
     foreach (var cls in classes)
     {
-      body.Append($"{(cls.HasCurrentHomework ? _tick : _cross)} {cls.Name}{GetSuperscript(cls.Weeks, true)}{GetStreakText(cls)}<br/>");
+      body.Append($"{(cls.HasCurrentHomework ? _tick : _cross)} {Encode(cls.Name)}{GetSuperscript(cls.Weeks, true)}{GetStreakText(cls)}<br/>");
     }
     body.Append("<br/>");
     AppendCheckingDatesDescription(body, classes);
-    body.Append($"<br/>Best wishes<br/><br/>{_schoolName}{_htmlEnd}");
+    body.Append($"<br/>Best wishes<br/><br/>{Encode(_schoolName)}{_htmlEnd}");
     return body.ToString();
   }
 
@@ -140,7 +141,7 @@ public class MessageGenerator
     );
 
   private static int GetPercentage(IEnumerable<Class> classes) =>
-    (int)Math.Round(classes.Average(o => o.HasCurrentHomework ? 1 : 0) * 100, 0);
+    classes.Any() ? (int)Math.Round(classes.Average(o => o.HasCurrentHomework ? 1 : 0) * 100, 0) : 0;
 
   private static string GetColour(int perc, bool isPrimary = false) =>
     perc switch
@@ -154,4 +155,6 @@ public class MessageGenerator
     cls.Streak == 1 ? string.Empty : (cls.HasCurrentHomework
       ? $" <b>&#x1F525;{cls.Streak}</b>"
       : $" <span style=\"font-weight: bold; color: red\">({cls.Streak})</span>");
+
+  private static string Encode(string value) => System.Net.WebUtility.HtmlEncode(value ?? string.Empty);
 }

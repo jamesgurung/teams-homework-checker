@@ -11,6 +11,7 @@ public class Functions(ILogger<Functions> logger)
 {
   [Function("SendWeeklyEmails")]
   [SuppressMessage("Style", "IDE0060:Remove unused parameter")]
+  [SuppressMessage("Performance", "CA1873:Avoid potentially expensive logging")]
   public async Task SendWeeklyEmails([TimerTrigger("0 0 8 * * 1", RunOnStartup = isDebug)] TimerInfo timer, [BlobInput("config")] BlobContainerClient container)
   {
     var tenantId = Environment.GetEnvironmentVariable("TenantId");
@@ -58,7 +59,7 @@ public class Functions(ILogger<Functions> logger)
       }
 
       var pastMondays = school.WorkingDays.Where(o => o < Today).Select(o => o.AddDays(-((int)o.DayOfWeek + 6) % 7)).Distinct().OrderDescending().ToList();
-      var weeksNeeded = Math.Max(school.DefaultWeeks, school.CustomWeeks.Max(o => o.Weeks));
+      var weeksNeeded = school.CustomWeeks?.Select(o => o.Weeks).DefaultIfEmpty(school.DefaultWeeks).Max() ?? school.DefaultWeeks;
       if (pastMondays.Count < weeksNeeded)
       {
         logger.LogWarning("{School} - Skipped: fewer than {WeeksNeeded} weeks available.", schoolCode, weeksNeeded);
@@ -144,11 +145,27 @@ public class Functions(ILogger<Functions> logger)
   }
 
   private static IEnumerable<string> GetLines(string text) => text.TrimEnd().Split('\n').Skip(1).Select(o => o.Trim());
-  private static IEnumerable<string[]> GetCsv(string text) => GetLines(text).Select(o => o.Split(','));
+
+  private static IEnumerable<string[]> GetCsv(string text)
+  {
+    using var reader = new StringReader(text);
+    using var parser = new Microsoft.VisualBasic.FileIO.TextFieldParser(reader)
+    {
+      HasFieldsEnclosedInQuotes = true,
+      TextFieldType = Microsoft.VisualBasic.FileIO.FieldType.Delimited,
+      TrimWhiteSpace = false
+    };
+    parser.SetDelimiters(",");
+    parser.ReadFields();
+    while (!parser.EndOfData)
+    {
+      yield return parser.ReadFields() ?? [];
+    }
+  }
 
   #if DEBUG
     const bool isDebug = true;
-    public static DateOnly Today { get; } = new(2026, 2, 23);
+    public static DateOnly Today { get; } = new(2026, 5, 11);
   #else
     const bool isDebug = false;
     public static DateOnly Today { get; } = DateOnly.FromDateTime(DateTime.Today);

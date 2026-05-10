@@ -66,13 +66,16 @@ public partial class TeamsClient(ClientSecretCredential credential)
         if (assignments is null) continue;
         foreach (var assignment in assignments)
         {
-          var bodyTag = assignment.Instructions.Content.IndexOf("<body>", StringComparison.OrdinalIgnoreCase);
-          if (bodyTag > 0) assignment.Instructions.Content = assignment.Instructions.Content[bodyTag..];
-          var instructions = HtmlTagRegex().Replace(assignment.Instructions.Content, " ");
+          if (!assignment.DueDateTime.HasValue) continue;
+          var content = assignment.Instructions?.Content ?? string.Empty;
+          var bodyTag = content.IndexOf("<body>", StringComparison.OrdinalIgnoreCase);
+          if (bodyTag > 0) content = content[bodyTag..];
+          var instructions = HtmlTagRegex().Replace(content, " ");
           instructions = MultipleWhiteSpaceRegex().Replace(instructions, " ").Trim();
           if (cls.ExcludeText is not null && instructions.Contains(cls.ExcludeText, StringComparison.OrdinalIgnoreCase)) continue;
           if (instructions.Length > 200) instructions = instructions[..197].Trim() + "...";
-          cls.Homework.Add(new(assignment.DisplayName.Trim(), instructions, DateOnly.FromDateTime(assignment.DueDateTime.Value.Date)));
+          var title = string.IsNullOrWhiteSpace(assignment.DisplayName) ? "Untitled assignment" : assignment.DisplayName.Trim();
+          cls.Homework.Add(new(title, instructions, DateOnly.FromDateTime(assignment.DueDateTime.Value.Date)));
         }
       }
     }
