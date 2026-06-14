@@ -1,4 +1,5 @@
 ﻿using Azure.Identity;
+using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.Graph.Beta;
 using Microsoft.Graph.Beta.Models;
@@ -8,24 +9,23 @@ using System.Text.RegularExpressions;
 
 namespace TeamsHomeworkChecker;
 
-public partial class TeamsClient(ClientSecretCredential credential)
+public partial class TeamsClient(ClientSecretCredential credential, ILogger logger)
 {
+  private const int MaxBatchAttempts = 4;
   private readonly GraphServiceClient _client = new(credential);
 
   public async Task<List<TeamsClass>> ListClassesAsync(string classFilter) {
-    var response = await _client.Education.Classes.GetAsync(config => {
+    var response = await Resilience.ExecuteAsync(() => _client.Education.Classes.GetAsync(config => {
       config.QueryParameters.Filter = $"startswith(externalId,'{classFilter}')";
       config.QueryParameters.Select = ["id", "externalId"];
       config.QueryParameters.Top = 999;
-    });
-    var classes = await IterateAsync<EducationClass, EducationClassCollectionResponse>(response);
+    }), logger, "List Teams classes", Resilience.IsTransientException, Resilience.GetRetryAfter);
+    var classes = await IterateAsync<EducationClass, EducationClassCollectionResponse>(response, "List Teams classes pages");
     return [.. classes.Select(o => new TeamsClass(o.Id, o.ExternalId))];
   }
 
   public async Task PopulateHomeworkAsync(IEnumerable<Class> classes, DateOnly endDate)
   {
-    var homework = new List<Homework>();
-
     foreach (var batch in classes.Chunk(20))
     {
       var batchContent = new BatchRequestContentCollection(_client);
@@ -43,20 +43,27 @@ public partial class TeamsClient(ClientSecretCredential credential)
         requestIds.Add(cls, await batchContent.AddBatchRequestStepAsync(request));
       }
 
-      var response = await _client.Batch.PostAsync(batchContent);
-      var throttledRequestIds = (await response.GetResponsesStatusCodesAsync())
-        .Where(o => o.Value == HttpStatusCode.TooManyRequests || o.Value == HttpStatusCode.ServiceUnavailable).Select(o => o.Key).ToList();
-      if (throttledRequestIds.Count > 0) {
-        var delay = 0;
-        foreach (var id in throttledRequestIds) {
-          using var throttledResponse = await response.GetResponseByIdAsync(id);
-          var retryAfter = (int)(throttledResponse.Headers?.RetryAfter?.Delta?.TotalMilliseconds ?? 0);
-          delay = Math.Max(delay, retryAfter);
+      var response = await Resilience.ExecuteAsync(() => _client.Batch.PostAsync(batchContent), logger, "Retrieve homework batch", Resilience.IsTransientException, Resilience.GetRetryAfter);
+      for (var attempt = 1; ; attempt++)
+      {
+        var transientRequestIds = (await response.GetResponsesStatusCodesAsync())
+          .Where(o => Resilience.IsTransientStatus((int)o.Value)).Select(o => o.Key).ToList();
+        if (transientRequestIds.Count == 0) break;
+        if (attempt == MaxBatchAttempts)
+          throw new HttpRequestException($"Graph batch contained transient responses after {MaxBatchAttempts} attempts: {string.Join(", ", transientRequestIds)}");
+
+        var retryAfter = TimeSpan.Zero;
+        foreach (var id in transientRequestIds)
+        {
+          using var transientResponse = await response.GetResponseByIdAsync(id);
+          var delay = transientResponse.Headers?.RetryAfter?.Delta ?? transientResponse.Headers?.RetryAfter?.Date - DateTimeOffset.UtcNow ?? TimeSpan.Zero;
+          if (delay > retryAfter) retryAfter = delay;
         }
-        Console.WriteLine($"Throttled, waiting {delay}ms...");
-        await Task.Delay(delay);
-        Console.WriteLine($"Resuming...");
-        response = await _client.Batch.PostAsync(batchContent);
+
+        var retryDelay = Resilience.GetDelay(attempt, retryAfter);
+        logger.LogWarning("Retrieve homework batch had {TransientResponses} transient responses on attempt {Attempt}/{MaxAttempts}; retrying in {DelayMs}ms.", transientRequestIds.Count, attempt, MaxBatchAttempts, (int)retryDelay.TotalMilliseconds);
+        await Task.Delay(retryDelay);
+        response = await Resilience.ExecuteAsync(() => _client.Batch.PostAsync(batchContent), logger, "Retrieve homework batch", Resilience.IsTransientException, Resilience.GetRetryAfter);
       }
 
       foreach (var (cls, requestId) in requestIds)
@@ -82,21 +89,21 @@ public partial class TeamsClient(ClientSecretCredential credential)
   }
 
   public async Task ListSchoolsAsync() {
-    var response = await _client.Education.Schools.GetAsync(config => {
+    var response = await Resilience.ExecuteAsync(() => _client.Education.Schools.GetAsync(config => {
       config.QueryParameters.Select = ["id", "displayName"];
       config.QueryParameters.Top = 999;
-    });
-    var schools = await IterateAsync<EducationSchool, EducationSchoolCollectionResponse>(response);
+    }), logger, "List Teams schools", Resilience.IsTransientException, Resilience.GetRetryAfter);
+    var schools = await IterateAsync<EducationSchool, EducationSchoolCollectionResponse>(response, "List Teams schools pages");
     foreach (var school in schools) {
       Console.WriteLine($"{school.DisplayName} - {school.Id}");
     }
   }
 
-  private async Task<List<TEntity>> IterateAsync<TEntity, TCollectionPage>(TCollectionPage response) where TCollectionPage : IParsable, IAdditionalDataHolder, new()
+  private async Task<List<TEntity>> IterateAsync<TEntity, TCollectionPage>(TCollectionPage response, string operation) where TCollectionPage : IParsable, IAdditionalDataHolder, new()
   {
     var items = new List<TEntity>();
     var iterator = PageIterator<TEntity, TCollectionPage>.CreatePageIterator(_client, response, o => { items.Add(o); return true; });
-    await iterator.IterateAsync();
+    await Resilience.ExecuteAsync(() => iterator.IterateAsync(), logger, operation, Resilience.IsTransientException, Resilience.GetRetryAfter);
     return items;
   }
 
